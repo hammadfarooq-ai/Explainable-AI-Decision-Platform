@@ -33,8 +33,9 @@ class RAGService:
         created_chunks = self._documents.add_chunks(document_id=document.id, chunks=chunk_records)
 
         # Update FAISS index
-        vs = vectorstore_faiss.get_vector_store()
-        vs.add_document(document_id=document.id, chunks=[c.text for c in created_chunks])
+        vectorstore_faiss.add_document(
+            document_id=document.id, chunks=[c.text for c in created_chunks]
+        )
 
         logger.info(
             "Ingested document into RAG store",
@@ -57,8 +58,7 @@ class RAGService:
     def recommend(self, *, question: str, model_id: int | None) -> tuple[str, list[int]]:
         """Generate a recommendation using the FAISS-backed retriever and LLM."""
 
-        vs = vectorstore_faiss.get_vector_store()
-        retriever = vs.as_retriever()
+        retriever = vectorstore_faiss.as_retriever()
         llm = chains.get_default_llm()
         chain = llm_client.build_recommendation_chain(retriever=retriever, llm=llm)
 
