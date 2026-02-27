@@ -19,6 +19,7 @@ from backend.app.infrastructure.db.repositories import (
     ModelRepository,
     TrainingRunRepository,
 )
+from backend.app.infrastructure.redis_cache import redis_cache
 from backend.app.infrastructure.mlflow_client import mlflow_client
 from ml_pipeline import (
     data_ingestion,
@@ -79,11 +80,21 @@ class MLService:
         return dataset.id, problem_type
 
     def compute_eda_summary(self, dataset_id: int) -> Dict[str, Any]:
+        """Return an EDA summary, using Redis caching when available."""
+
+        cache_key = f"eda_summary:{dataset_id}"
+        cached = redis_cache.get_json(cache_key)
+        if cached is not None:
+            return cached
+
         dataset = self._datasets.get(dataset_id)
         if not dataset:
             raise DatasetNotFoundError(f"Dataset {dataset_id} not found")
         df = data_ingestion.load_csv(Path(dataset.path))
-        return eda.compute_eda_summary(df, dataset.target_column)
+        summary = eda.compute_eda_summary(df, dataset.target_column)
+        # Cache summary for subsequent calls
+        redis_cache.set_json(cache_key, summary)
+        return summary
 
     # Training and evaluation
 
@@ -191,16 +202,15 @@ class MLService:
         """Generate predictions for a list of records."""
 
         if model_id is not None:
-            model_record = self._db.query(
-                ModelRepository._db.mapper.class_manager.local_table  # type: ignore[attr-defined]
-            )
-            raise PredictionError("Explicit model selection not yet implemented")
+            model_record = self._models.get(model_id)
+            if not model_record:
+                raise PredictionError(f"Model {model_id} not found")
+        else:
+            model_record = self._models.get_production_model()
+            if not model_record:
+                raise PredictionError("No production model is available")
 
-        production_model = self._models.get_production_model()
-        if not production_model:
-            raise PredictionError("No production model is available")
-
-        model_uri = f"runs:/{production_model.mlflow_run_id}/model"
+        model_uri = f"runs:/{model_record.mlflow_run_id}/model"
         model = mlflow_client.load_sklearn_model(model_uri)
 
         df = pd.DataFrame.from_records(records)
@@ -217,7 +227,7 @@ class MLService:
                 df=df,
             )
 
-        return production_model.id, predictions, probabilities, explanation
+        return model_record.id, predictions, probabilities, explanation
 
     # Drift detection
 

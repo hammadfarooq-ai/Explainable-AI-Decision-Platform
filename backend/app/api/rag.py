@@ -18,7 +18,7 @@ def get_rag_service(db: Session = Depends(get_db)) -> RAGService:
 
 
 @router.post("/documents", response_model=rag_schemas.DocumentIngestResponse)
-def ingest_document(
+async def ingest_document(
     request: rag_schemas.DocumentIngestRequest,
     rag_service: Annotated[RAGService, Depends(get_rag_service)],
 ) -> rag_schemas.DocumentIngestResponse:
@@ -43,7 +43,7 @@ def ingest_document(
 
 
 @router.get("/documents", response_model=rag_schemas.ListDocumentsResponse)
-def list_documents(
+async def list_documents(
     rag_service: Annotated[RAGService, Depends(get_rag_service)],
 ) -> rag_schemas.ListDocumentsResponse:
     """List documents available to the RAG pipeline."""
@@ -55,7 +55,7 @@ def list_documents(
 
 
 @router.post("/recommend", response_model=rag_schemas.RecommendationResponse)
-def generate_recommendation(
+async def generate_recommendation(
     request: rag_schemas.RecommendationRequest,
     rag_service: Annotated[RAGService, Depends(get_rag_service)],
 ) -> rag_schemas.RecommendationResponse:

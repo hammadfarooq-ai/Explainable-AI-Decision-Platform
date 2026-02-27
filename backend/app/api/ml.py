@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
@@ -58,7 +58,7 @@ async def upload_dataset(
 
 
 @router.get("/datasets/{dataset_id}/eda", response_model=ml_schemas.EdaSummaryResponse)
-def get_eda_summary(
+async def get_eda_summary(
     dataset_id: int,
     ml_service: Annotated[MLService, Depends(get_ml_service)],
 ) -> ml_schemas.EdaSummaryResponse:
@@ -78,11 +78,11 @@ def get_eda_summary(
 
 
 @router.post("/train", response_model=ml_schemas.TrainResponse)
-def train_models(
+async def train_models(
     request: ml_schemas.TrainRequest,
     ml_service: Annotated[MLService, Depends(get_ml_service)],
 ) -> ml_schemas.TrainResponse:
-    """Trigger model training, evaluation, and selection."""
+    """Trigger model training synchronously (blocking until completion)."""
 
     try:
         result = ml_service.train_models(request.dataset_id)
@@ -100,8 +100,31 @@ def train_models(
     )
 
 
+@router.post("/train/async")
+async def train_models_async(
+    request: ml_schemas.TrainRequest,
+    background_tasks: BackgroundTasks,
+    ml_service: Annotated[MLService, Depends(get_ml_service)],
+) -> dict:
+    """Schedule model training as a background job.
+
+    This endpoint returns immediately while training continues in the background
+    within the same process. For long-running or CPU-heavy workloads in
+    production, consider moving this into a dedicated worker process.
+    """
+
+    try:
+        # Ensure dataset is valid before scheduling work.
+        _ = ml_service.compute_eda_summary(request.dataset_id)
+    except DatasetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    background_tasks.add_task(ml_service.train_models, request.dataset_id)
+    return {"status": "scheduled", "dataset_id": request.dataset_id}
+
+
 @router.post("/predict", response_model=ml_schemas.PredictResponse)
-def predict(
+async def predict(
     request: ml_schemas.PredictRequest,
     ml_service: Annotated[MLService, Depends(get_ml_service)],
 ) -> ml_schemas.PredictResponse:

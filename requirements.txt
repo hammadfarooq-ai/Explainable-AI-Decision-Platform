@@ -20,3 +20,4 @@ langchain-openai
 python-dotenv
 pytest
 httpx
+redis

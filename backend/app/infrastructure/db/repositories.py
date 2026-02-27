@@ -109,6 +109,11 @@ class ModelRepository:
         stmt = select(models.Model).where(models.Model.training_run_id == training_run_id)
         return self._db.execute(stmt).scalars().all()
 
+    def get(self, model_id: int) -> models.Model | None:
+        """Return a model by its identifier."""
+
+        return self._db.get(models.Model, model_id)
+
     def get_production_model(self) -> models.Model | None:
         stmt = select(models.Model).where(models.Model.is_production.is_(True))
         return self._db.execute(stmt).scalars().first()

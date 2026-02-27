@@ -53,6 +53,16 @@ class Settings(BaseSettings):
         default="faiss_indexes", description="Directory for FAISS indexes."
     )
 
+    # Redis / caching
+    redis_url: str = Field(
+        default="redis://redis:6379/0",
+        description="Redis connection URL used for caching and background jobs.",
+    )
+    cache_ttl_seconds: int = Field(
+        default=600,
+        description="Default TTL (in seconds) for cached items such as EDA summaries.",
+    )
+
     # RAG / LLM
     llm_provider: Literal["openai", "huggingface", "azure_openai"] = Field(
         default="openai", description="LLM provider identifier."
