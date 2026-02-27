@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: enterprise_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://user:password@db:5432/mlflow
+      MLFLOW_ARTIFACT_ROOT: /mlruns
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlruns:/mlruns
+    depends_on:
+      - db
+    command: >
+      mlflow server
+      --backend-store-uri postgresql+psycopg2://user:password@db:5432/mlflow
+      --host 0.0.0.0
+      --port 5000
+      --default-artifact-root /mlruns
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    environment:
+      ENV: local
+      DEBUG: "true"
+      DATABASE_URL: postgresql+psycopg2://user:password@db:5432/enterprise_ai
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      DATA_DIR: /app/data
+      MODELS_DIR: /app/ml_models
+      FAISS_INDEX_DIR: /app/faiss_indexes
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - mlflow
+    volumes:
+      - ../data:/app/data
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  mlruns:
+
